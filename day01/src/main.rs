@@ -60,14 +60,14 @@ fn calc_part_2(parsed_lists: &ParsedLists) -> usize {
     let mut right_count_lookup: HashMap<usize, usize> = HashMap::new();
 
     let mut total_similarity = 0;
-    let mut peekable = parsed_lists.right.iter().peekable();
+    let mut right_iter = parsed_lists.right.iter();
 
-    if let Some(first) = peekable.next() {
+    if let Some(first) = right_iter.next() {
         let mut cur = *first;
         let mut count = 1;
 
         loop {
-            let next = peekable.next();
+            let next = right_iter.next();
             if next.is_some_and(|&n| n == cur) {
                 count += 1;
             } else {
