@@ -21,7 +21,15 @@ fn main() {
         .filter(|f| f == &ReactorSafety::Safe)
         .count();
 
+    let dampened_count = reactor
+        .data
+        .iter()
+        .map(|r| check_row_safety_with_dampener(&r))
+        .filter(|f| f == &ReactorSafety::Safe)
+        .count();
+
     println!("Safe rows {count}");
+    println!("After dampening {dampened_count}");
 }
 
 static MAXIMUM_MEASUREMENT_DELTA: usize = 3;
@@ -60,6 +68,27 @@ fn parse_reactor_line_into_vec(line: &str) -> Result<Vec<usize>, String> {
         Ok(result) => Ok(result),
         Err(error) => Err(format!("Paring of {line} failed with error {error:?}")),
     }
+}
+
+fn check_row_safety_with_dampener(reactor_row: &[usize]) -> ReactorSafety {
+    let original_result = check_row_safety(reactor_row);
+    if original_result == ReactorSafety::Safe {
+        return ReactorSafety::Safe;
+    }
+
+    for index in 0..reactor_row.len() {
+        let dampenend_row = reactor_row
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != index)
+            .map(|(_, v)| *v)
+            .collect::<Vec<_>>();
+        if check_row_safety(&dampenend_row) == ReactorSafety::Safe {
+            return ReactorSafety::Safe;
+        }
+    }
+
+    original_result
 }
 
 fn check_row_safety(reactor_row: &[usize]) -> ReactorSafety {
@@ -150,6 +179,28 @@ mod tests {
             .data
             .iter()
             .map(|r| check_row_safety(r))
+            .filter(|f| f == &ReactorSafety::Safe)
+            .count();
+
+        assert_eq!(count, test_output)
+    }
+
+    #[test]
+    fn test_part_2() {
+        let test_input = r#"7 6 4 2 1
+1 2 7 8 9
+9 7 6 2 1
+1 3 2 4 5
+8 6 4 4 1
+1 3 6 7 9"#;
+        let test_output = 4;
+
+        let reactor = Reactor::try_from_text(&test_input).unwrap();
+
+        let count = reactor
+            .data
+            .iter()
+            .map(|r| check_row_safety_with_dampener(r))
             .filter(|f| f == &ReactorSafety::Safe)
             .count();
 
