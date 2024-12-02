@@ -15,8 +15,9 @@ fn main() {
     let reactor = Reactor::try_from_text(&file_contents).expect("Could not parse your reactor");
 
     let count = reactor
-        .into_iter()
-        .map(check_row_safety)
+        .data
+        .iter()
+        .map(|r| check_row_safety(&r))
         .filter(|f| f == &ReactorSafety::Safe)
         .count();
 
@@ -35,81 +36,30 @@ enum ReactorSafety {
 
 #[derive(Debug)]
 struct Reactor {
-    row_size: usize,
-    data: Vec<usize>,
-}
-
-struct ReactorIterator<'a> {
-    reactor: &'a Reactor,
-    cur: usize,
+    data: Vec<Vec<usize>>,
 }
 
 impl Reactor {
     fn try_from_text(text: &str) -> Result<Reactor, String> {
-        let mut data: Vec<usize> = vec![];
-        let mut lines = text.lines();
+        let mut data = vec![];
 
-        if let Some(first) = lines.next() {
-            let row_size = parse_reactor_line_into_vec(&mut data, first)?;
-
-            while let Some(row) = lines.next() {
-                let count = parse_reactor_line_into_vec(&mut data, row)?;
-                if count != row_size {
-                    return Err(format!(
-                        "Row {row} had size {count} but expected {row_size}"
-                    ));
-                }
-            }
-
-            Ok(Reactor { row_size, data })
-        } else {
-            Err(String::from("Empty reactor"))
+        for row in text.lines().map(parse_reactor_line_into_vec) {
+            data.push(row?);
         }
+
+        Ok(Reactor { data })
     }
 }
 
-impl<'a> IntoIterator for &'a Reactor {
-    type Item = &'a [usize];
-
-    type IntoIter = ReactorIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ReactorIterator {
-            reactor: &self,
-            cur: 0,
-        }
+fn parse_reactor_line_into_vec(line: &str) -> Result<Vec<usize>, String> {
+    match line
+        .split_ascii_whitespace()
+        .map(str::parse::<usize>)
+        .collect()
+    {
+        Ok(result) => Ok(result),
+        Err(error) => Err(format!("Paring of {line} failed with error {error:?}")),
     }
-}
-
-impl<'a> Iterator for ReactorIterator<'a> {
-    type Item = &'a [usize];
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.cur += 1;
-
-        if self.reactor.data.len() >= self.cur * self.reactor.row_size {
-            Some(
-                &self.reactor.data
-                    [(self.cur - 1) * self.reactor.row_size..self.cur * self.reactor.row_size],
-            )
-        } else {
-            None
-        }
-    }
-}
-
-fn parse_reactor_line_into_vec(vec: &mut Vec<usize>, line: &str) -> Result<usize, String> {
-    let mut count = 0;
-
-    for number in line.split_ascii_whitespace() {
-        count += 1;
-        match number.parse::<usize>() {
-            Ok(number) => vec.push(number),
-            Err(err) => return Err(format!("Could not parse {number} with error {err}")),
-        }
-    }
-
-    Ok(count)
 }
 
 fn check_row_safety(reactor_row: &[usize]) -> ReactorSafety {
@@ -197,8 +147,9 @@ mod tests {
         let reactor = Reactor::try_from_text(&test_input).unwrap();
 
         let count = reactor
-            .into_iter()
-            .map(check_row_safety)
+            .data
+            .iter()
+            .map(|r| check_row_safety(r))
             .filter(|f| f == &ReactorSafety::Safe)
             .count();
 
