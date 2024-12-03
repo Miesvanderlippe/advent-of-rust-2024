@@ -20,6 +20,9 @@ fn main() {
 
     let part_1 = solve_part_1(&file_contents);
     println!("Part 1 anser {part_1}");
+
+    let part_2 = solve_part_2(&file_contents);
+    println!("Part 2 anser {part_2}");
 }
 
 #[derive(PartialEq, Debug)]
@@ -44,6 +47,52 @@ fn parse_mul(input: &str) -> IResult<&str, Mul> {
     let (input, _) = tag(")")(input)?;
 
     Ok((input, Mul { x, y }))
+}
+
+fn parse_do(input: &str) -> IResult<&str, &str> {
+    tag("do()")(input)
+}
+
+fn parse_dont(input: &str) -> IResult<&str, &str> {
+    tag("don't()")(input)
+}
+
+fn solve_part_2(input: &str) -> usize {
+    let mut input_slice = input;
+    let mut sum = 0;
+    let mut execute_instruction = true;
+
+    while input_slice.len() >= 8 {
+        if let Ok((remainder, _)) = parse_do(input_slice) {
+            execute_instruction = true;
+            input_slice = remainder;
+            continue;
+        }
+
+        if let Ok((remainder, _)) = parse_dont(input_slice) {
+            execute_instruction = false;
+            input_slice = remainder;
+            continue;
+        }
+
+        if !execute_instruction {
+            input_slice = &input_slice[1..];
+            continue;
+        }
+
+        match parse_mul(input_slice) {
+            Ok((remainder, mul)) => {
+                input_slice = remainder;
+
+                sum += mul.x * mul.y;
+            }
+            Err(_) => {
+                input_slice = &input_slice[1..];
+            }
+        }
+    }
+
+    sum
 }
 
 fn solve_part_1(input: &str) -> usize {
@@ -81,6 +130,14 @@ mod tests {
         let memory = "xmul(2,4)%&mul[3,7]!@^do_not_mul(5,5)+mul(32,64]then(mul(11,8)mul(8,5))";
         let result = 161;
         let sum = solve_part_1(&memory);
+        assert_eq!(result, sum);
+    }
+
+    #[test]
+    fn test_part_2_example() {
+        let memory = "xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))";
+        let result = 48;
+        let sum = solve_part_2(&memory);
         assert_eq!(result, sum);
     }
 }
