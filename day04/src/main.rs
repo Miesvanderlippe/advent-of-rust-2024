@@ -1,5 +1,4 @@
 use std::fs;
-use std::io::Bytes;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -64,14 +63,11 @@ fn solve_part_2(puzzle: &str, search: &str) -> Result<usize, String> {
         for col in 0..=(puzzle_width - search_len) {
             let start = (row * puzzle_width) + col;
 
-            let match_map: [bool; 4] = [
-                byte_matcher(&puzzle_bytes, start, &map_1, &search),
-                byte_matcher(&puzzle_bytes, start, &map_1, &inverse_search),
-                byte_matcher(&puzzle_bytes, start, &map_2, &search),
-                byte_matcher(&puzzle_bytes, start, &map_2, &inverse_search),
-            ];
-
-            if match_map.iter().filter(|&is_match| *is_match).count() == 2 {
+            if (byte_matcher(&puzzle_bytes, start, &map_1, &search)
+                || byte_matcher(&puzzle_bytes, start, &map_1, &inverse_search))
+                && (byte_matcher(&puzzle_bytes, start, &map_2, &search)
+                    || byte_matcher(&puzzle_bytes, start, &map_2, &inverse_search))
+            {
                 matches += 1;
             }
         }
