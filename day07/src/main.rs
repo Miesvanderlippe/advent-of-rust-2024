@@ -29,37 +29,11 @@ fn solve_part_1(calibration_doc: &str) -> usize {
     for line in calibration_doc.lines() {
         let (_, cal) = parse_input_line(line).unwrap();
 
-        let solutions = calculate_recursively(
-            0,
-            cal.calibration_sum,
-            &mut Solution::new(),
-            &cal.calibration_vectors,
-        );
-        if solutions.len() >= 1 {
+        if calculate_recursively(0, cal.calibration_sum, &cal.calibration_vectors) {
             sum += cal.calibration_sum;
         }
     }
     sum
-}
-
-#[derive(Clone)]
-enum Operand {
-    Add,
-    Multiply,
-}
-
-#[derive(Clone)]
-struct Solution {
-    inner_data: Vec<Operand>,
-}
-
-impl Solution {
-    fn add_operand(&mut self, new_operand: Operand) {
-        self.inner_data.push(new_operand)
-    }
-    fn new() -> Self {
-        Solution { inner_data: vec![] }
-    }
 }
 
 struct CalibrationEquation {
@@ -93,63 +67,17 @@ fn parse_input_line(input: &str) -> IResult<&str, CalibrationEquation> {
     ))
 }
 
-fn calculate_recursively(
-    sum: usize,
-    limit: usize,
-    solution: &mut Solution,
-    remainder: &[usize],
-) -> Vec<Solution> {
+fn calculate_recursively(sum: usize, limit: usize, remainder: &[usize]) -> bool {
     let multiply_result = sum * remainder[0];
     let addition_result = sum + remainder[0];
 
     if remainder.len() == 1 {
-        if multiply_result == limit && addition_result == limit {
-            let mut m_solution = solution.clone();
-            m_solution.add_operand(Operand::Multiply);
-
-            let mut a_solution = solution.clone();
-            a_solution.add_operand(Operand::Add);
-
-            return vec![m_solution, a_solution];
-        } else if multiply_result == limit {
-            let mut m_solution = solution.clone();
-            m_solution.add_operand(Operand::Multiply);
-
-            return vec![m_solution];
-        } else if addition_result == limit {
-            let mut a_solution = solution.clone();
-            a_solution.add_operand(Operand::Add);
-
-            return vec![a_solution];
-        } else {
-            vec![]
-        }
+        multiply_result == limit || addition_result == limit
     } else {
-        if limit >= multiply_result && limit >= addition_result {
-            let mut m_solution = solution.clone();
-            m_solution.add_operand(Operand::Multiply);
-
-            let mut a_solution = solution.clone();
-            a_solution.add_operand(Operand::Add);
-
-            return vec![
-                calculate_recursively(multiply_result, limit, &mut m_solution, &remainder[1..]),
-                calculate_recursively(addition_result, limit, &mut a_solution, &remainder[1..]),
-            ]
-            .into_iter()
-            .flatten()
-            .collect();
-        } else if limit >= multiply_result {
-            let mut m_solution = solution.clone();
-            m_solution.add_operand(Operand::Multiply);
-            return calculate_recursively(multiply_result, limit, &mut m_solution, &remainder[1..]);
-        } else if limit >= addition_result {
-            let mut a_solution = solution.clone();
-            a_solution.add_operand(Operand::Add);
-            return calculate_recursively(addition_result, limit, &mut a_solution, &remainder[1..]);
-        } else {
-            vec![]
-        }
+        // Only calculate a branch if the result is not already too big.
+        (limit >= multiply_result && calculate_recursively(multiply_result, limit, &remainder[1..]))
+            || (limit >= addition_result
+                && calculate_recursively(addition_result, limit, &remainder[1..]))
     }
 }
 
@@ -175,8 +103,7 @@ mod tests {
         let mut actual_sum = 0;
 
         for (limit, factors) in inputs {
-            let solutions = calculate_recursively(0, limit, &mut Solution::new(), &factors);
-            if solutions.len() >= 1 {
+            if calculate_recursively(0, limit, &factors) {
                 actual_sum += limit;
             }
         }
