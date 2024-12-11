@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 use std::fs;
 use std::path::PathBuf;
@@ -19,8 +20,40 @@ fn main() {
 
     println!("{}", board);
 
-    let part_1_answer = solve_part_1(board, args.display_solution);
+    let part_1_answer = solve_part_1(board.clone(), args.display_solution);
     println!("Part 1: {part_1_answer}");
+
+    let part_2_answer = solve_part_2(board, args.display_solution);
+    println!("Part 2: {part_2_answer}");
+}
+
+fn solve_part_2(mut board: SituationMap, show_blocks: bool) -> usize {
+    let mut coords: HashSet<Coord> = HashSet::new();
+
+    if board.step().is_none() {
+        return 0;
+    }
+
+    loop {
+        if let Some((_, &element)) = &board.what_is_in_front(&board.player) {
+            if element == MapElements::Free {
+                match board.test_circular_path(board.player.coords, board.player.orientation) {
+                    Some(c) => {
+                        coords.insert(c);
+                    }
+                    None => {}
+                };
+            }
+        }
+
+        // println!("{board}");
+
+        if board.step().is_none() {
+            break;
+        }
+    }
+
+    coords.len()
 }
 
 fn solve_part_1(mut board: SituationMap, display_solution: bool) -> usize {
@@ -48,18 +81,19 @@ fn solve_part_1(mut board: SituationMap, display_solution: bool) -> usize {
     board.seen_tiles()
 }
 
+#[derive(Clone)]
 struct Player {
     orientation: Orientation,
     coords: Coord,
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Copy, Hash)]
 struct Coord {
     row: usize,
     col: usize,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug, Hash, Copy, Eq)]
 enum Orientation {
     Up,
     Right,
@@ -78,13 +112,14 @@ impl Orientation {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 enum MapElements {
     Free,
     PrevouslySeen,
     Obstructed,
 }
 
+#[derive(Clone)]
 struct SituationMap {
     player: Player,
     map: Vec<MapElements>,
@@ -93,14 +128,58 @@ struct SituationMap {
 }
 
 impl SituationMap {
+    fn test_circular_path(
+        &mut self,
+        starting_at: Coord,
+        orientation: Orientation,
+    ) -> Option<Coord> {
+        let mut virtual_player = Player {
+            coords: starting_at.clone(),
+            orientation: orientation.clone(),
+        };
+
+        let mut visited_tiles: HashSet<(Coord, Orientation)> = HashSet::new();
+        let (old_location, &old_tile) = self.what_is_in_front(&virtual_player)?;
+
+        self.set_at(&old_location, MapElements::Obstructed);
+
+        loop {
+            match self.what_is_in_front(&virtual_player) {
+                Some((coord, element)) => match element {
+                    MapElements::Free | MapElements::PrevouslySeen => {
+                        virtual_player.coords = coord;
+                    }
+                    MapElements::Obstructed => {
+                        virtual_player.orientation = virtual_player.orientation.rotate_right();
+
+                        if !visited_tiles
+                            .insert((virtual_player.coords, virtual_player.orientation))
+                        {
+                            self.set_at(&old_location, old_tile);
+                            return Some(old_location.clone());
+                        }
+                    }
+                },
+                None => {
+                    self.set_at(&old_location, old_tile);
+                    return None;
+                }
+            };
+        }
+    }
+
     fn what_is_at(&self, coord: &Coord) -> Option<&MapElements> {
-        if coord.row > self.map_height {
+        if coord.col >= self.map_width {
             None
-        } else if coord.col > self.map_width {
+        } else if coord.row >= self.map_height {
             None
         } else {
-            self.map.get((self.map_height * coord.row) + coord.col)
+            self.map.get((self.map_width * coord.row) + coord.col)
         }
+    }
+
+    fn set_at(&mut self, coord: &Coord, element: MapElements) {
+        self.map[(self.map_width * coord.row) + coord.col] = element;
     }
 
     fn seen_tiles(&self) -> usize {
@@ -110,25 +189,49 @@ impl SituationMap {
             .count()
     }
 
-    fn what_is_in_front(&self) -> Option<(Coord, &MapElements)> {
-        let coords_in_front = match self.player.orientation {
-            Orientation::Up => Coord {
-                row: self.player.coords.row - 1,
-                col: self.player.coords.col,
-            },
-            Orientation::Right => Coord {
-                row: self.player.coords.row,
-                col: self.player.coords.col + 1,
-            },
-            Orientation::Down => Coord {
-                row: self.player.coords.row + 1,
-                col: self.player.coords.col,
-            },
-            Orientation::Left => Coord {
-                row: self.player.coords.row,
-                col: self.player.coords.col - 1,
-            },
-        };
+    fn what_is_in_front(&self, player: &Player) -> Option<(Coord, &MapElements)> {
+        let coords_in_front = match player.orientation {
+            Orientation::Up => {
+                if player.coords.row == 0 {
+                    return None;
+                } else {
+                    Some(Coord {
+                        row: player.coords.row - 1,
+                        col: player.coords.col,
+                    })
+                }
+            }
+            Orientation::Right => {
+                if player.coords.col >= self.map_width {
+                    None
+                } else {
+                    Some(Coord {
+                        row: player.coords.row,
+                        col: player.coords.col + 1,
+                    })
+                }
+            }
+            Orientation::Down => {
+                if player.coords.row + 1 >= self.map_height {
+                    None
+                } else {
+                    Some(Coord {
+                        row: player.coords.row + 1,
+                        col: player.coords.col,
+                    })
+                }
+            }
+            Orientation::Left => {
+                if player.coords.col == 0 {
+                    None
+                } else {
+                    Some(Coord {
+                        row: player.coords.row,
+                        col: player.coords.col - 1,
+                    })
+                }
+            }
+        }?;
 
         let element_in_front = self.what_is_at(&coords_in_front)?;
 
@@ -136,30 +239,29 @@ impl SituationMap {
     }
 
     fn update_map(&mut self, at: &Coord, element: MapElements) {
-        if at.row > self.map_height || at.col > self.map_width {
+        if at.row + 1 > self.map_height || at.col + 1 > self.map_width {
             panic!("Tried writing outside of map at {}, {}", at.col, at.row);
         } else {
-            self.map[(self.map_height * at.row) + at.col] = element;
+            self.map[(self.map_width * at.row) + at.col] = element;
         }
     }
 
     fn step(&mut self) -> Option<&Coord> {
-        loop {
-            match self.what_is_in_front() {
-                Some((coord, element)) => match element {
-                    MapElements::Free | MapElements::PrevouslySeen => {
-                        self.player.coords = coord;
-                        self.update_map(&self.player.coords.clone(), MapElements::PrevouslySeen);
-                        return Some(&self.player.coords);
-                    }
-                    MapElements::Obstructed => {
-                        self.player.orientation = self.player.orientation.rotate_right()
-                    }
-                },
-                // We went out of bounds, the desired end state.
-                None => return None,
-            };
-        }
+        match self.what_is_in_front(&self.player) {
+            Some((coord, element)) => match element {
+                MapElements::Free | MapElements::PrevouslySeen => {
+                    self.player.coords = coord;
+                    self.update_map(&self.player.coords.clone(), MapElements::PrevouslySeen);
+                    return Some(&self.player.coords);
+                }
+                MapElements::Obstructed => {
+                    self.player.orientation = self.player.orientation.rotate_right();
+                    return Some(&self.player.coords);
+                }
+            },
+            // We went out of bounds, the desired end state.
+            None => return None,
+        };
     }
 }
 
@@ -171,7 +273,7 @@ impl Display for SituationMap {
                     Some(MapElements::Free) => write!(f, "\x1b[31;42m")?,
                     Some(MapElements::PrevouslySeen) => write!(f, "\x1b[31;106m")?,
                     Some(MapElements::Obstructed) => write!(f, "\x1b[31;40m")?,
-                    None => todo!(),
+                    None => todo!("Read outside of map"),
                 }
 
                 if self.player.coords.col == col && self.player.coords.row == row {
@@ -219,8 +321,16 @@ impl TryFrom<&str> for SituationMap {
                 match c {
                     '.' => map.push(MapElements::Free),
                     '#' => map.push(MapElements::Obstructed),
-                    '^' => {
+                    '^' | '>' | 'v' | '<' => {
                         map.push(MapElements::PrevouslySeen);
+
+                        let orientation = match c {
+                            '^' => Orientation::Up,
+                            '>' => Orientation::Right,
+                            'v' => Orientation::Down,
+                            '<' => Orientation::Left,
+                            _ => panic!("This is literally impossible"),
+                        };
 
                         match player {
                             Some(p) => {
@@ -232,7 +342,7 @@ impl TryFrom<&str> for SituationMap {
                             None => {
                                 player = Some(Player {
                                     coords: Coord { row, col },
-                                    orientation: Orientation::Up,
+                                    orientation,
                                 })
                             }
                         }
@@ -273,5 +383,111 @@ mod tests {
     fn test_part_1_example() {
         let board = SituationMap::try_from(EXAMPLE_INPUT).unwrap();
         assert_eq!(solve_part_1(board, true), 41);
+    }
+
+    #[test]
+    fn test_insert() {
+        let mut board = SituationMap::try_from(
+            "....
+....
+..^.
+..#.",
+        )
+        .unwrap();
+        assert_eq!(board.map_height, 4);
+        assert_eq!(board.map_width, 4);
+
+        let coords = Coord { col: 0, row: 0 };
+        board.set_at(&coords, MapElements::Obstructed);
+        println!("{board}");
+
+        assert!(board
+            .what_is_at(&coords)
+            .is_some_and(|e| *e == MapElements::Obstructed));
+
+        let coords = Coord { col: 3, row: 3 };
+        board.set_at(&coords, MapElements::Obstructed);
+        println!("{board}");
+
+        assert!(board
+            .what_is_at(&coords)
+            .is_some_and(|e| *e == MapElements::Obstructed));
+
+        assert!(board
+            .what_is_in_front(&board.player)
+            .is_some_and(|(_, e)| *e == MapElements::Free));
+
+        board.player.orientation = Orientation::Down;
+
+        assert!(board
+            .what_is_in_front(&board.player)
+            .is_some_and(|(_, e)| *e == MapElements::Obstructed));
+    }
+
+    #[test]
+    fn test_part_2_example() {
+        let board = SituationMap::try_from(EXAMPLE_INPUT).unwrap();
+
+        assert_eq!(solve_part_2(board, true), 6);
+    }
+
+    #[test]
+    fn test_circular_path_detection() {
+        let boards = [".............
+...........#.
+#v..........#
+.#.........#."];
+
+        for board in boards {
+            println!("{board}");
+            let parsed_board = SituationMap::try_from(board).unwrap();
+            println!("{parsed_board}");
+            assert_eq!(solve_part_2(parsed_board, true), 1);
+        }
+    }
+
+    #[test]
+    fn test_detection_near_edges() {
+        let boards = [
+            "#<..
+....
+....
+....",
+            "#...
+^...
+....
+....",
+            "..>#
+....
+....
+....",
+            "...#
+...^
+....
+....",
+            "....
+....
+....
+#<..",
+            "....
+....
+v...
+#...",
+            "....
+....
+....
+..>#",
+            "....
+....
+...v
+...#",
+        ];
+        for board in boards {
+            let parsed_board = SituationMap::try_from(board).unwrap();
+            match parsed_board.what_is_in_front(&parsed_board.player) {
+                Some((_, element)) => assert_eq!(element, &MapElements::Obstructed),
+                _ => panic!("Failed to get expected element."),
+            }
+        }
     }
 }
