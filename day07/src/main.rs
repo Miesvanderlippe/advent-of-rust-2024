@@ -22,6 +22,21 @@ fn main() {
 
     let part_1_answer = solve_part_1(&file_contents);
     println!("Part 1: {part_1_answer}");
+
+    let part_2_answer = solve_part_2(&file_contents);
+    println!("Part 2: {part_2_answer}");
+}
+
+fn solve_part_2(calibration_doc: &str) -> usize {
+    let mut sum = 0;
+    for line in calibration_doc.lines() {
+        let (_, cal) = parse_input_line(line).unwrap();
+
+        if calculate_recursively(0, cal.calibration_sum, &cal.calibration_vectors, true) {
+            sum += cal.calibration_sum;
+        }
+    }
+    sum
 }
 
 fn solve_part_1(calibration_doc: &str) -> usize {
@@ -29,7 +44,7 @@ fn solve_part_1(calibration_doc: &str) -> usize {
     for line in calibration_doc.lines() {
         let (_, cal) = parse_input_line(line).unwrap();
 
-        if calculate_recursively(0, cal.calibration_sum, &cal.calibration_vectors) {
+        if calculate_recursively(0, cal.calibration_sum, &cal.calibration_vectors, false) {
             sum += cal.calibration_sum;
         }
     }
@@ -67,18 +82,50 @@ fn parse_input_line(input: &str) -> IResult<&str, CalibrationEquation> {
     ))
 }
 
-fn calculate_recursively(sum: usize, limit: usize, remainder: &[usize]) -> bool {
-    let multiply_result = sum * remainder[0];
-    let addition_result = sum + remainder[0];
-
-    if remainder.len() == 1 {
-        multiply_result == limit || addition_result == limit
-    } else {
-        // Only calculate a branch if the result is not already too big.
-        (limit >= multiply_result && calculate_recursively(multiply_result, limit, &remainder[1..]))
-            || (limit >= addition_result
-                && calculate_recursively(addition_result, limit, &remainder[1..]))
+fn calculate_recursively(
+    sum: usize,
+    limit: usize,
+    remainder: &[usize],
+    do_the_funny: bool,
+) -> bool {
+    // In case of do_the_funny, we my take the second to last and last number.
+    // To make logic handling easier, just check if we still have a remaining number.
+    if remainder.len() == 0 {
+        return sum == limit;
     }
+
+    let multiply_res = sum * remainder[0];
+    let addition_res = sum + remainder[0];
+    let mut funny_number: Option<_> = None;
+
+    if do_the_funny {
+        // Could do some log10 math here, multiply the sum, add the next number etc.
+        // lets save optimizations for harder problems.
+        funny_number = Some(
+            format!("{sum}{}", remainder[0])
+                .parse::<usize>()
+                .expect("Should be able to parse two usizes as a usize"),
+        );
+    }
+
+    // This used to be a return (branch1 || branch2 || branch3) but I think that became unreadable
+    // Compiler will figure it out anyways :P
+    if limit >= multiply_res
+        && calculate_recursively(multiply_res, limit, &remainder[1..], do_the_funny)
+    {
+        return true;
+    }
+    if limit >= addition_res
+        && calculate_recursively(addition_res, limit, &remainder[1..], do_the_funny)
+    {
+        return true;
+    }
+    if funny_number.is_some_and(|f| {
+        limit >= f && calculate_recursively(f, limit, &remainder[1..], do_the_funny)
+    }) {
+        return true;
+    }
+    return false;
 }
 
 #[cfg(test)]
@@ -103,7 +150,7 @@ mod tests {
         let mut actual_sum = 0;
 
         for (limit, factors) in inputs {
-            if calculate_recursively(0, limit, &factors) {
+            if calculate_recursively(0, limit, &factors, false) {
                 actual_sum += limit;
             }
         }
@@ -123,5 +170,20 @@ mod tests {
 21037: 9 7 18 13
 292: 11 6 16 20";
         assert_eq!(solve_part_1(&example_input), example_sum);
+    }
+
+    #[test]
+    fn test_part2_example() {
+        let example_sum = 11387;
+        let example_input = "190: 10 19
+3267: 81 40 27
+83: 17 5
+156: 15 6
+7290: 6 8 6 15
+161011: 16 10 13
+192: 17 8 14
+21037: 9 7 18 13
+292: 11 6 16 20";
+        assert_eq!(solve_part_2(&example_input), example_sum);
     }
 }
